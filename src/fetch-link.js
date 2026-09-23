@@ -74,6 +74,30 @@ export function stripJinaWrapper(text) {
 }
 
 /**
+ * Fetch with retry/backoff on rate limits (HTTP 429) and transient 5xx,
+ * since reader proxies and origin servers both rate-limit anonymous clients.
+ */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchWithRetry(target, headers, tries = 3) {
+  let last = null;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(target, {
+        signal: AbortSignal.timeout(30000),
+        headers,
+      });
+      if (res.status !== 429 && res.status < 500) return res;
+      last = new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      last = e;
+    }
+    if (i < tries - 1) await sleep((i + 1) * 1500);
+  }
+  throw last;
+}
+
+/**
  * Fetch the content behind a pasted link. Returns the raw body text
  * (for a claude share URL: the snapshot JSON). Throws on failure.
  */
@@ -81,16 +105,20 @@ export async function fetchLink(raw) {
   const url = String(raw).trim();
   if (!looksLikeUrl(url)) throw new Error(`not a URL: ${raw}`);
   const target = proxyTarget(url);
-  const res = await fetch(target, {
-    signal: AbortSignal.timeout(30000),
-    headers: { accept: "application/json, text/plain, */*", "user-agent": "sigil/1.0.0" },
+  const res = await fetchWithRetry(target, {
+    accept: "application/json, text/plain, */*",
+    "user-agent": "sigil/1.0.0",
   });
   if (!res.ok) throw new Error(`fetch failed (HTTP ${res.status}) for ${target}`);
   const body = await res.text();
   const out = stripJinaWrapper(body).trim();
-  if (isGeminiShare(url) && /accounts\.google\.com\/ServiceLogin/i.test(out) && out.length < 5000) {
+  if (
+    isGeminiShare(url) &&
+    /accounts\.google\.com\/ServiceLogin/i.test(out)
+  ) {
     throw new Error(
-      "Gemini share is private — open it in a browser and share as \"Anyone with the link\", then retry"
+      "Google serves Gemini share pages only to real browsers (even for public links). " +
+        `Open ${url} yourself, copy the conversation, and paste it here (or write it to a file and run sigil <file>).`
     );
   }
   if (!out) throw new Error(`empty response from ${target}`);
