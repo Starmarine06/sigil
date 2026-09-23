@@ -14,9 +14,9 @@ Network is used *only* when you pass a URL.
 ## Install
 
 ```sh
-npm install -g sigil
+npm install -g @sigil-dev/sigil
 # or run without installing:
-npx sigil
+npx @sigil-dev/sigil
 ```
 
 Requires Node.js 18+.
