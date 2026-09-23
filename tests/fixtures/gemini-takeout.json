@@ -1,0 +1,28 @@
+[
+  {
+    "title": "Tell me about RSS readers",
+    "time": "2026-01-28T09:12:00Z",
+    "event": [
+      {
+        "name": "gemini_apps",
+        "params": [
+          { "key": "prompt", "value": "What is the best way to store feed URLs for a small RSS reader?" },
+          { "key": "gemini_response", "value": "For a local tool, SQLite is the simplest choice. Prisma works well with it." }
+        ]
+      }
+    ]
+  },
+  {
+    "title": "RSS reader fetch loop",
+    "time": "2026-01-28T09:20:00Z",
+    "event": [
+      {
+        "name": "gemini_apps",
+        "params": [
+          { "key": "prompt", "value": "We should fetch feeds every 15 minutes. How do I do that in Node?" },
+          { "key": "gemini_response", "value": "Use node-cron with the expression */15 * * * *." }
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "exported_at": "2026-03-17T10:00:00Z",
+  "source": "gemini.google.com",
+  "conversation_count": 1,
+  "total_messages": 4,
+  "conversations": [
+    {
+      "index": 0,
+      "url": "https://gemini.google.com/app/abc123",
+      "title": "Dockerize a FastAPI app",
+      "messageCount": 4,
+      "messages": [
+        { "role": "user", "content": "Help me Dockerize my FastAPI app." },
+        { "role": "assistant", "content": "Let's go with a multi-stage build and a non-root user for security." },
+        { "role": "user", "content": "The app must listen on port 8000." },
+        { "role": "assistant", "content": "Here is a Dockerfile:\n```dockerfile\nFROM python:3.12-slim AS base\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install -r requirements.txt\nUSER nonroot\nEXPOSE 8000\nCMD [\"uvicorn\", \"main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8000\"]\n```" }
+      ]
+    }
+  ]
+}

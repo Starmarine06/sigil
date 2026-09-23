@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>sigil — chat → context</title>
+  <link rel="stylesheet" href="/web/style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>sigil</h1>
+      <p class="sub">Explainable, deterministic chat → context. Paste a share link, an export, or a transcript — no AI, no keys. Nothing leaves your machine unless you paste a link (fetched through a reader proxy).</p>
+    </header>
+
+    <section class="input">
+      <div id="drop" class="drop">
+        <strong>Drop a file here</strong> or pick one
+        <input type="file" id="file" accept=".json,.md,.txt,.html" class="file-input" />
+      </div>
+      <label for="paste">…or paste a chat — a <code>https://claude.ai/share/…</code> link, Claude/Gemini JSON, or copied transcript:</label>
+      <textarea id="paste" rows="8" placeholder='Paste a Claude share link (https://claude.ai/share/…), a Claude/Gemini export, or a copied chat like:
+
+**You:** …
+**Assistant:** …'
+        spellcheck="false"></textarea>
+      <div class="row">
+        <label for="title">Title <input id="title" type="text" placeholder="(auto)" /></label>
+        <button id="go">Generate context</button>
+      </div>
+      <p class="hint">Shortcuts: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> generate · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> copy</p>
+    </section>
+
+    <section id="out" class="output hidden">
+      <div class="row">
+        <h2>Context</h2>
+        <div class="spacer"></div>
+        <button id="copy">Copy</button>
+        <button id="dl">Download .md</button>
+      </div>
+      <div id="md" class="md"></div>
+      <details>
+        <summary>Raw evidence (JSON)</summary>
+        <pre id="json" class="raw"></pre>
+      </details>
+    </section>
+
+    <footer class="foot">sigil · MIT · deterministic heuristics + TextRank/RAKE/MMR · no model, no API</footer>
+  </main>
+  <script type="module" src="/web/app.js"></script>
+</body>
+</html>
