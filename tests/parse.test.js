@@ -77,6 +77,12 @@ test("garbage JSON string reports an error", () => {
   assert.ok(res.error);
 });
 
+test("markdown starting with [ is treated as text, not broken JSON", () => {
+  const chat = parseInput("[Sign in](https://accounts.google.com/ServiceLogin?continue=1) to continue");
+  assert.equal(chat.source, "text");
+  assert.ok(chat.messages[0].text.includes("Sign in"));
+});
+
 test("JSON passed as string parses", () => {
   const raw = fixture("claude-export.json");
   const chat = parseInput(raw);

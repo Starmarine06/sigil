@@ -5,7 +5,7 @@ import { join, resolve, extname, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import { analyze } from "../src/index.js";
-import { looksLikeUrl, fetchLink } from "../src/fetch-link.js";
+import { looksLikeUrl, fetchLink, isChatgptShare } from "../src/fetch-link.js";
 import { startTui } from "../src/tui.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -71,7 +71,7 @@ async function main() {
   const parsed = parseArgs(argv);
 
   if (parsed.help) return process.stdout.write(HELP);
-  if (parsed.version) return process.stdout.write(`sigil 1.0.0\n`);
+  if (parsed.version) return process.stdout.write(`sigil 1.1.0\n`);
   if (parsed.serve) return startServer(parsed.port || 8177);
 
   const arg = parsed.positional[0];
@@ -108,6 +108,7 @@ async function main() {
       process.stderr.write(`sigil: fetching ${file}\n`);
       try {
         raw = await fetchLink(file);
+        if (isChatgptShare(file)) raw = "**Assistant:**\n\n" + raw;
       } catch (e) {
         fail(`could not fetch ${file}: ${e.message}`);
       }
@@ -176,6 +177,7 @@ function startServer(port) {
         try {
           if (typeof input.url === "string" && looksLikeUrl(input.url)) {
             raw = await fetchLink(input.url);
+            if (isChatgptShare(input.url)) raw = "**Assistant:**\n\n" + raw;
           } else if (typeof input.text === "string") {
             raw = input.text;
           } else {

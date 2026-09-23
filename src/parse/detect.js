@@ -23,9 +23,15 @@ export function parseInput(input, opts = {}) {
       try {
         data = JSON.parse(trimmed);
       } catch {
-        return {
-          error: "Input looks like JSON but could not be parsed. Check the file for truncated/corrupt content.",
-        };
+        if (trimmed[0] === "{") {
+          return {
+            error: "Input looks like JSON but could not be parsed. Check the file for truncated/corrupt content.",
+          };
+        }
+        // A leading "[" is ambiguous: a JSON array vs. markdown link syntax
+        // like "[Sign in](https://…)". If it isn't valid JSON, treat it as
+        // rendered text (e.g. reader-proxy output).
+        return parseTranscriptFallback(trimmed);
       }
     } else {
       return parseTranscriptFallback(trimmed);

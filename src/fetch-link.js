@@ -2,18 +2,25 @@
  * Resolve a pasted URL into raw chat text.
  *
  * Supported forms:
- *   - https://claude.ai/share/<uuid>  → fetched through a public reader proxy.
+ *   - https://claude.ai/share/<uuid>         → fetched through a public reader proxy.
  *     The raw chat_snapshots endpoint is Cloudflare-challenged, and claude.ai
  *     sends no CORS headers (browsers can't reach it), so the CLI and the web
  *     server do this fetch — never the browser tab.
- *   - any other http(s) URL           → fetched directly (raw JSON export, gist,
- *     pastebin, etc.).
+ *   - https://chatgpt.com/share/<uuid>       → fetched through the reader proxy
+ *     (also the legacy https://chat.openai.com/share/<uuid> domain).
+ *   - https://share.gemini.google/<token>    → fetched through the reader proxy.
+ *     ChatGPT/Gemini share pages are browser-rendered; a direct fetch returns a
+ *     JS shell or a sign-in wall, so they need the proxy too.
+ *   - any other http(s) URL                  → fetched directly (raw JSON export,
+ *     gist, pastebin, etc.).
  *
  * Network is only touched when the user supplies a URL. Zero dependencies:
  * uses Node's global fetch (Node >= 18).
  */
 
 const CLAUDE_SHARE_RE = /^https?:\/\/(?:www\.)?claude\.ai\/share\/([0-9a-f-]{20,})$/i;
+const CHATGPT_SHARE_RE = /^https?:\/\/(?:www\.)?(?:chatgpt\.com|chat\.openai\.com)\/share\/([0-9a-f-]{20,})$/i;
+const GEMINI_SHARE_RE = /^https?:\/\/(?:www\.)?share\.gemini\.google\/([A-Za-z0-9_-]{6,})$/i;
 
 export function looksLikeUrl(text) {
   return typeof text === "string" && /^https?:\/\/\S+/i.test(text.trim());
@@ -22,6 +29,30 @@ export function looksLikeUrl(text) {
 export function claudeShareUuid(text) {
   const m = CLAUDE_SHARE_RE.exec(text.trim());
   return m ? m[1] : null;
+}
+
+/** True for ChatGPT share-page URLs (rendered content is the assistant turn). */
+export function isChatgptShare(raw) {
+  return CHATGPT_SHARE_RE.test(String(raw).trim());
+}
+
+/** True for Gemini share-page URLs. */
+export function isGeminiShare(raw) {
+  return GEMINI_SHARE_RE.test(String(raw).trim());
+}
+
+/**
+ * Reader-proxy URL for a share page that needs a browser, or the URL itself
+ * for anything fetchable directly.
+ */
+export function proxyTarget(raw) {
+  const url = String(raw).trim();
+  const uuid = claudeShareUuid(url);
+  if (uuid) return snapshotUrl(uuid);
+  if (CHATGPT_SHARE_RE.test(url) || GEMINI_SHARE_RE.test(url)) {
+    return `https://r.jina.ai/${url}`;
+  }
+  return url;
 }
 
 /** Proxy URL for a claude.ai share snapshot (bypasses the Cloudflare challenge). */
@@ -49,8 +80,7 @@ export function stripJinaWrapper(text) {
 export async function fetchLink(raw) {
   const url = String(raw).trim();
   if (!looksLikeUrl(url)) throw new Error(`not a URL: ${raw}`);
-  const uuid = claudeShareUuid(url);
-  const target = uuid ? snapshotUrl(uuid) : url;
+  const target = proxyTarget(url);
   const res = await fetch(target, {
     signal: AbortSignal.timeout(30000),
     headers: { accept: "application/json, text/plain, */*", "user-agent": "sigil/1.0.0" },
@@ -58,6 +88,11 @@ export async function fetchLink(raw) {
   if (!res.ok) throw new Error(`fetch failed (HTTP ${res.status}) for ${target}`);
   const body = await res.text();
   const out = stripJinaWrapper(body).trim();
+  if (isGeminiShare(url) && /accounts\.google\.com\/ServiceLogin/i.test(out) && out.length < 5000) {
+    throw new Error(
+      "Gemini share is private — open it in a browser and share as \"Anyone with the link\", then retry"
+    );
+  }
   if (!out) throw new Error(`empty response from ${target}`);
   return out;
 }
