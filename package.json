@@ -1,5 +1,5 @@
 {
-  "name": "@sigil-dev/sigil",
+  "name": "@sigilware/sigil",
   "version": "1.0.0",
   "description": "Deterministic, explainable, zero-dependency chat-to-context extractor for Claude and Gemini exports and share links. No API keys, no AI; network only when you pass a URL.",
   "type": "module",
