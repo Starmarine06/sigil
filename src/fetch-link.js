@@ -117,8 +117,9 @@ export async function fetchLink(raw) {
     /accounts\.google\.com\/ServiceLogin/i.test(out)
   ) {
     throw new Error(
-      "Google serves Gemini share pages only to real browsers (even for public links). " +
-        `Open ${url} yourself, copy the conversation, and paste it here (or write it to a file and run sigil <file>).`
+      "Google serves Gemini share links only to real browsers (public or not).\n" +
+        "Open this in your browser, copy the conversation, and paste it:\n" +
+        url
     );
   }
   if (!out) throw new Error(`empty response from ${target}`);

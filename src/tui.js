@@ -291,16 +291,35 @@ export async function startTui(projectName, { preload } = {}) {
     return out.length ? out : [""];
   }
 
-  function layout() {
+  /** ANSI-safe wrap for the status/error header row(s). */
+  function wrapStatus(s, width) {
+    const str = String(s);
+    let prefix = "";
+    let i = 0;
+    while (str[i] === "\x1b") {
+      const m = str.slice(i).match(/^\x1b\[[0-9;?]*[a-zA-Z]/);
+      if (!m) break;
+      prefix += m[0];
+      i += m[0].length;
+    }
+    const body = str.slice(i).replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "");
+    const rows = [];
+    for (const seg of wrapLine(body, width)) {
+      rows.push(prefix + seg + (prefix ? AN.r : ""));
+    }
+    return rows.length ? rows : [prefix + AN.r];
+  }
+
+  function layout(sbRows = 1) {
     const rows = process.stdout.rows || 24;
     const cols = process.stdout.columns || 80;
     const bufLines = buffer.split("\n");
     const inRows = Math.max(1, Math.min(4, bufLines.length));
-    // chrome: top border + header + 2 dividers + bottom border + spacer + footer
-    const need = 7 + inRows + 2;
+    // chrome: top border + header(sbRows) + content divider + input divider + bottom border + spacer + footer
+    const need = 7 + inRows + 2 + (sbRows - 1);
     let top = rows >= 22 ? Math.max(1, Math.floor(rows * 0.1)) : 0;
     if (rows - 2 * top - need < 2) top = Math.max(0, Math.floor((rows - need) / 2));
-    const C = Math.max(1, rows - 2 * top - 7 - inRows);
+    const C = Math.max(1, rows - 2 * top - 7 - inRows - (sbRows - 1));
     return { rows, cols, top, C, inRows, W: Math.max(2, cols - 4) };
   }
 
@@ -361,7 +380,14 @@ export async function startTui(projectName, { preload } = {}) {
   }
 
   function render() {
-    const { rows, cols, top, C, inRows, W } = layout();
+    const sbW = Math.max(2, (process.stdout.columns || 80) - 4);
+    const sb = [];
+    for (const part of String(status || hint).split("\n")) {
+      for (const row of wrapStatus(part, sbW)) sb.push(row);
+    }
+    sb.splice(8); // safety net: never let a pathological message crowd out the panel
+    if (!sb.length) sb.push("");
+    const { rows, cols, top, C, inRows, W } = layout(sb.length);
     const len = shownLines().length;
     scroll = Math.max(0, Math.min(scroll, Math.max(0, len - C)));
 
@@ -372,9 +398,8 @@ export async function startTui(projectName, { preload } = {}) {
     const fill = Math.max(0, cols - visibleLen(title) - 3);
     frame.push(clipLine(AN.p + "┌─" + AN.r + title + AN.p + "─".repeat(fill) + "┐" + AN.r, cols));
 
-    // header / status line
-    const head = (status || hint) + "  ";
-    frame.push(rowBox(head, cols));
+    // header / status line (wraps across rows instead of clipping with "…")
+    for (const row of sb) frame.push(rowBox(row, cols));
 
     // divider
     frame.push(AN.p + "├" + "─".repeat(Math.max(1, cols - 2)) + "┤" + AN.r);
@@ -417,7 +442,7 @@ export async function startTui(projectName, { preload } = {}) {
 
     // Repaint the whole centered panel on the alternate screen.
     const body = frame.map((l) => clipLine(l, cols)).join("\n");
-    const cursorRow = top + 4 + C + inRows; // last input line (1-based on screen)
+    const cursorRow = top + 3 + sb.length + C + inRows; // last input line (1-based on screen)
     const cursorCol = 4;
     let out = "\x1b[2J\x1b[" + (top + 1) + ";1H" + body + "\x1b[" + cursorRow + ";" + cursorCol + "H";
     if (rows !== prevRows || cols !== prevCols) {
