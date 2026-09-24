@@ -18,6 +18,9 @@
  * uses Node's global fetch (Node >= 18).
  */
 
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
 const CLAUDE_SHARE_RE = /^https?:\/\/(?:www\.)?claude\.ai\/share\/([0-9a-f-]{20,})$/i;
 const CHATGPT_SHARE_RE = /^https?:\/\/(?:www\.)?(?:chatgpt\.com|chat\.openai\.com)\/share\/([0-9a-f-]{20,})$/i;
 const GEMINI_SHARE_RE = /^https?:\/\/(?:www\.)?share\.gemini\.google\/([A-Za-z0-9_-]{6,})$/i;
@@ -53,6 +56,63 @@ export function geminiGuidanceError(url) {
     "Open this in your browser, copy the conversation, and paste it:\n" +
     url
   );
+}
+
+/**
+ * Name of the optional Gemini reader package, from the SIGIL_GEMINI_READER
+ * environment variable. A bare specifier resolves like any npm package (global
+ * installs share one node_modules, so a globally-installed reader is found);
+ * an absolute or relative path is loaded directly.
+ */
+export function geminiReaderName() {
+  const v = process.env.SIGIL_GEMINI_READER;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+function isFileSpecifier(name) {
+  return /^\.{0,2}[/\\]/.test(name) || /^[A-Za-z]:[\\/]/.test(name) || /^[/\\]/.test(name);
+}
+
+/**
+ * Bare package names import as-is; file paths become file:// URLs (required by
+ * the ESM loader, and relative paths resolve against the current directory).
+ */
+function toImportSpec(name) {
+  if (!isFileSpecifier(name)) return name;
+  const abs = path.isAbsolute(name) ? name : path.resolve(process.cwd(), name);
+  return pathToFileURL(abs).href;
+}
+
+/**
+ * Contract of a Gemini reader module:
+ *   - default export, or a named `fetchGemini`, is an async function
+ *   - input:  { url: <share_url> }
+ *   - output: { text: <transcript or markdown>, title?: string }
+ * Returns null when no reader is configured; throws when a configured reader
+ * cannot be loaded or fails.
+ */
+export async function fetchGeminiViaReader(url) {
+  const name = geminiReaderName();
+  if (!name) return null;
+  let mod;
+  try {
+    mod = await import(toImportSpec(name));
+  } catch (e) {
+    throw new Error(
+      `SIGIL_GEMINI_READER is set to "${name}" but that module could not be loaded: ${e.message}. ` +
+        "Install or publish the reader package, fix the path, or unset the variable to use the built-in guidance."
+    );
+  }
+  const fn = mod.default || mod.fetchGemini;
+  if (typeof fn !== "function") {
+    throw new Error(`SIGIL_GEMINI_READER "${name}" exports no default function and no \`fetchGemini\` export.`);
+  }
+  const out = await fn({ url });
+  const text = out && typeof out.text === "string" ? out.text.trim() : "";
+  if (!text) {
+    throw new Error(`SIGIL_GEMINI_READER "${name}" returned no \`text\` string.`);
+  }
+  return { text, title: out && typeof out.title === "string" ? out.title : null };
 }
 
 /**
@@ -112,12 +172,29 @@ async function fetchWithRetry(target, headers, tries = 3) {
 }
 
 /**
+ * True when a proxy fetch of a Gemini share returned a Google blocking page
+ * instead of the conversation: the sign-in wall or in-app error shells
+ * ("Check your internet connection…", "We could not complete your request…").
+ * Deliberately narrow — actual transcripts that merely mention google/gemini
+ * must not be classified as blocked.
+ */
+export function geminiBlocked(text) {
+  return /(accounts\.google\.com\/ServiceLogin|Check your internet connection and try again|We could not complete your request)/i.test(
+    String(text)
+  );
+}
+
+/**
  * Fetch the content behind a pasted link. Returns the raw body text
  * (for a claude share URL: the snapshot JSON). Throws on failure.
  */
 export async function fetchLink(raw) {
   const url = String(raw).trim();
   if (!looksLikeUrl(url)) throw new Error(`not a URL: ${raw}`);
+  if (isGeminiShare(url)) {
+    const viaReader = await fetchGeminiViaReader(url);
+    if (viaReader) return viaReader.text;
+  }
   const target = proxyTarget(url);
   const res = await fetchWithRetry(target, {
     accept: "application/json, text/plain, */*",
@@ -126,10 +203,7 @@ export async function fetchLink(raw) {
   if (!res.ok) throw new Error(`fetch failed (HTTP ${res.status}) for ${target}`);
   const body = await res.text();
   const out = stripJinaWrapper(body).trim();
-  if (
-    isGeminiShare(url) &&
-    /accounts\.google\.com\/ServiceLogin/i.test(out)
-  ) {
+  if (isGeminiShare(url) && geminiBlocked(out)) {
     throw new Error(geminiGuidanceError(url));
   }
   if (!out) throw new Error(`empty response from ${target}`);

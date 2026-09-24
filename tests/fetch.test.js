@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import {
   looksLikeUrl,
   claudeShareUuid,
@@ -9,6 +11,9 @@ import {
   isChatgptShare,
   isGeminiShare,
   geminiGuidanceError,
+  geminiReaderName,
+  fetchGeminiViaReader,
+  geminiBlocked,
 } from "../src/fetch-link.js";
 
 test("looksLikeUrl detects http(s) URLs and rejects everything else", () => {
@@ -81,4 +86,76 @@ test("geminiGuidanceError puts the share URL on its own final line", () => {
   assert.match(lines[0], /real browsers/i);
   assert.match(lines[1], /paste it/);
   assert.equal(lines[2], url);
+});
+
+test("geminiReaderName reads SIGIL_GEMINI_READER, trims it, returns null when unset", () => {
+  const had = "SIGIL_GEMINI_READER" in process.env;
+  const backup = process.env.SIGIL_GEMINI_READER;
+  try {
+    delete process.env.SIGIL_GEMINI_READER;
+    assert.equal(geminiReaderName(), null);
+    process.env.SIGIL_GEMINI_READER = "  @scoop/gemini-reader  ";
+    assert.equal(geminiReaderName(), "@scoop/gemini-reader");
+    process.env.SIGIL_GEMINI_READER = "   ";
+    assert.equal(geminiReaderName(), null);
+  } finally {
+    if (had) process.env.SIGIL_GEMINI_READER = backup;
+    else delete process.env.SIGIL_GEMINI_READER;
+  }
+});
+
+test("fetchGeminiViaReader returns null with no reader configured", async () => {
+  const had = "SIGIL_GEMINI_READER" in process.env;
+  const backup = process.env.SIGIL_GEMINI_READER;
+  try {
+    delete process.env.SIGIL_GEMINI_READER;
+    assert.equal(await fetchGeminiViaReader("https://share.gemini.google/PJgxYtV0aZrQ"), null);
+  } finally {
+    if (had) process.env.SIGIL_GEMINI_READER = backup;
+    else delete process.env.SIGIL_GEMINI_READER;
+  }
+});
+
+test("fetchGeminiViaReader loads a reader from a file path and returns its text", async () => {
+  const had = "SIGIL_GEMINI_READER" in process.env;
+  const backup = process.env.SIGIL_GEMINI_READER;
+  const fixture = fileURLToPath(new URL("./fixtures/gemini-reader.mjs", import.meta.url));
+  try {
+    process.env.SIGIL_GEMINI_READER = fixture;
+    const out = await fetchGeminiViaReader("https://share.gemini.google/PJgxYtV0aZrQ");
+    assert.ok(out);
+    assert.ok(out.text.startsWith("**human:** Design"));
+    assert.match(out.text, /Adventure Awaits/);
+    assert.equal(out.title, "Custom Boho Adventure T-Shirt Design");
+  } finally {
+    if (had) process.env.SIGIL_GEMINI_READER = backup;
+    else delete process.env.SIGIL_GEMINI_READER;
+  }
+});
+
+test("fetchGeminiViaReader reports a reader that cannot be loaded", async () => {
+  const had = "SIGIL_GEMINI_READER" in process.env;
+  const backup = process.env.SIGIL_GEMINI_READER;
+  try {
+    process.env.SIGIL_GEMINI_READER = path.join("__no_such_pkg__", "reader.mjs");
+    await assert.rejects(
+      fetchGeminiViaReader("https://share.gemini.google/PJgxYtV0aZrQ"),
+      /could not be loaded/
+    );
+  } finally {
+    if (had) process.env.SIGIL_GEMINI_READER = backup;
+    else delete process.env.SIGIL_GEMINI_READER;
+  }
+});
+
+test("geminiBlocked recognizes Google blocking pages, not real transcripts", () => {
+  assert.equal(geminiBlocked("sign in to continue\naccounts.google.com/ServiceLogin"), true);
+  assert.equal(geminiBlocked("Check your internet connection and try again"), true);
+  assert.equal(geminiBlocked("We could not complete your request.\nGoogle apps\nSign in"), true);
+  assert.equal(
+    geminiBlocked("Google apps\nCheck your internet connection and try again\nCheck your internet connection and try again"),
+    true
+  );
+  assert.equal(geminiBlocked("**human:** Design a boho T-shirt\n**assistant:** Here's a concept."), false);
+  assert.equal(geminiBlocked("let's talk about google gemini bard apps and more — long real conversation continues here..."), false);
 });

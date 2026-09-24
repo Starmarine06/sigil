@@ -39,10 +39,31 @@ RAKE, TextRank, MMR, Luhn). Tests: `npm test` (node:test). Cross-OS: Windows/Lin
 - `a102b9e` feat: chatgpt and gemini share link support via reader proxy (+1.1.0)
 - `12352b3` fix: retry on rate limits; replace misleading private-share error with browser guidance for Gemini shares
 - `245d435` fix: wrap TUI status/error header across rows instead of clipping with ellipsis
-- (next) refactor: extract Gemini guidance error to tested helper, document share-link support in README
+- `8d8594a` refactor: extract Gemini guidance error to tested helper, document share-link support in README
+- (next) feat: optional Gemini reader hook (`SIGIL_GEMINI_READER`) + broader Google-wall detection
+
+## Gemini reader hook (NEW in this session)
+- User is building their own npm package (headless browser) that can read Gemini share pages.
+- sigil loads it **optionally** — zero hard deps. Env var `SIGIL_GEMINI_READER` = package name
+  or file path. Global installs resolve the package name automatically (shared `node_modules`).
+- Reader contract (in `src/fetch-link.js` → `fetchGeminiViaReader`):
+  - module exports a **default fn or `fetchGemini`**
+  - input `{ url }`, output `{ text, title? }`; `text` required
+  - throws propagate to the CLI
+- `fetchLink` now: Gemini share → try reader first (if configured) → else proxy → if the proxied
+  body is Google-blocked → guidance error (URL on its own line).
+- New pure helper `geminiBlocked(text)`: detects sign-in wall + in-app error shells
+  ("Check your internet connection and try again…", "We could not complete your request…").
+  Deliberately narrow so transcripts merely mentioning google/gemini aren't misclassified.
+- Tests: 87 total (reader load via file path, env parsing, load-failure errors, wall detection).
+- End-to-end verified: fixture reader `tests/fixtures/gemini-reader.mjs` returns a boho
+  T-shirt transcript and the CLI produces a real context doc with it; without the reader the
+  fallback produces the "real browsers / paste it" guidance.
 
 ## Known next steps
-1. Verify TUI wrapping in a real terminal (open the repo TUI, paste a Gemini link).
-2. Publish **1.1.0** (needs fresh OTP), confirm `npm view @sigilware/sigil version` === `1.1.0`.
-3. Anything else in README's feature list not yet done (transcript parsing `[^ ]+`,
+1. **User builds the Gemini reader npm package** (headless browser) — sigil's hook is ready,
+   contract in README. Test via `SIGIL_GEMINI_READER=browser-reader node bin/sigil.js <gemini-url>`.
+2. Verify TUI wrapping in a real terminal (open the repo TUI, paste a Gemini link).
+3. Publish **1.1.0** (needs fresh OTP), confirm `npm view @sigilware/sigil version` === `1.1.0`.
+4. Anything else in README's feature list not yet done (transcript parsing `[^ ]+`,
    `/show` overlay, etc.).
