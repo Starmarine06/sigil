@@ -40,29 +40,35 @@ RAKE, TextRank, MMR, Luhn). Tests: `npm test` (node:test). Cross-OS: Windows/Lin
 - `12352b3` fix: retry on rate limits; replace misleading private-share error with browser guidance for Gemini shares
 - `245d435` fix: wrap TUI status/error header across rows instead of clipping with ellipsis
 - `8d8594a` refactor: extract Gemini guidance error to tested helper, document share-link support in README
-- (next) feat: optional Gemini reader hook (`SIGIL_GEMINI_READER`) + broader Google-wall detection
+- (next) feat: optional Gemini reader hook — CLI (`linksnap`) or ES-module file
 
 ## Gemini reader hook (NEW in this session)
-- User is building their own npm package (headless browser) that can read Gemini share pages.
-- sigil loads it **optionally** — zero hard deps. Env var `SIGIL_GEMINI_READER` = package name
-  or file path. Global installs resolve the package name automatically (shared `node_modules`).
-- Reader contract (in `src/fetch-link.js` → `fetchGeminiViaReader`):
-  - module exports a **default fn or `fetchGemini`**
-  - input `{ url }`, output `{ text, title? }`; `text` required
-  - throws propagate to the CLI
-- `fetchLink` now: Gemini share → try reader first (if configured) → else proxy → if the proxied
-  body is Google-blocked → guidance error (URL on its own line).
-- New pure helper `geminiBlocked(text)`: detects sign-in wall + in-app error shells
-  ("Check your internet connection and try again…", "We could not complete your request…").
-  Deliberately narrow so transcripts merely mentioning google/gemini aren't misclassified.
-- Tests: 87 total (reader load via file path, env parsing, load-failure errors, wall detection).
-- End-to-end verified: fixture reader `tests/fixtures/gemini-reader.mjs` returns a boho
-  T-shirt transcript and the CLI produces a real context doc with it; without the reader the
-  fallback produces the "real browsers / paste it" guidance.
+- **`linksnap`** (user's own package, https://github.com/flame/linksnap, published `linksnap@1.0.0`,
+  globally installed) is the reader. It's a CLI (`bin: linksnap`) that drives a stealth browser,
+  captures Gemini's batchexecute RPC, emits Markdown. Its module entry auto-runs the CLI on import,
+  so sigil must NOT `import('linksnap')` in-process — it spawns it instead.
+- sigil keeps **zero hard dependencies**: the reader is optional, discovered at runtime.
+- `SIGIL_GEMINI_READER` selectors (in `src/fetch-link.js`):
+  - **bare name / executable** (e.g. `linksnap`) → CLI mode: `runGeminiCli(name, [url, ...geminiCliFlags()])`
+  - **file path / file: URL** → module mode: `import()` the file, call default export or `fetchGemini`
+    with `{ url }` → `{ text, title? }`
+- CLI subprocess details (Win32):
+  - `.cmd` shims need `cmd.exe /d /c`; hand-built command line passed with
+    `windowsVerbatimArguments: true` (Node's default quoting would mangle hand-built quotes),
+    wrapped in an extra pair of quotes because `cmd /c` strips the outer pair.
+    Avoids spawn()'s `shell:true` → no DEP0190 deprecation warning.
+  - `SIGIL_GEMINI_ARGS` overrides default flags `--stdout --headless`.
+  - `AbortSignal.timeout(240000)` kill-switch; non-zero exit + empty stdout → error with stderr tail.
+- `isFileSpecifier`: scoped names (`@scope/…`) stay bare; anything else with a path separator,
+  `./`/`../`, a drive, or a leading slash is treated as a file path.
+- Live-verified: `SIGIL_GEMINI_READER=linksnap node bin/sigil.js <real gemini url> -o out.md`
+  → real T-shirt-design transcript extracted, `# Context:` doc written.
+- Tests: 91 total (was 87; +CLI capture, +CLI failure, +flags default/override, +cannot-run
+  wrapper). New fixture `tests/fixtures/linksnap-stub.mjs`.
 
 ## Known next steps
-1. **User builds the Gemini reader npm package** (headless browser) — sigil's hook is ready,
-   contract in README. Test via `SIGIL_GEMINI_READER=browser-reader node bin/sigil.js <gemini-url>`.
+1. Publisher: (user) confirm browser handling of `linksnap` gemini capture flags; optionally make
+   linksnap's `--list`/filter surface fold into sigil. Already live-verified end to end.
 2. Verify TUI wrapping in a real terminal (open the repo TUI, paste a Gemini link).
 3. Publish **1.1.0** (needs fresh OTP), confirm `npm view @sigilware/sigil version` === `1.1.0`.
 4. Anything else in README's feature list not yet done (transcript parsing `[^ ]+`,

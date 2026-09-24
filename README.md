@@ -42,23 +42,37 @@ install an optional Gemini reader.
 
 ### Optional Gemini reader
 
-`SIGIL_GEMINI_READER=<name>` points sigil at any npm package (or a path to a
-script) that can render a Gemini share page and return the conversation. When set,
-Gemini share links are fetched through the reader automatically; when unset, the
-built-in "open and paste" guidance applies. Global installs resolve the package
-name automatically (they share one `node_modules`).
+`sigil` cannot read Gemini share pages itself (Google serves them only to real
+browsers). Point it at a reader that can, with `SIGIL_GEMINI_READER`:
 
-Reader contract (ES module):
-
-```js
-// default export, or a named `fetchGemini` export:
-export async function fetchGemini({ url }) {
-  // open url in a real browser (Playwright/Puppeteer), grab the transcript…
-  return { text: "…raw chat text or markdown…", title: "Optional title" };
-}
+```sh
+SIGIL_GEMINI_READER=linksnap sigil https://share.gemini.google/...
 ```
 
-`text` is required; `title` is optional. Any thrown error propagates to the CLI.
+[`linksnap`](https://github.com/flame/linksnap) is a matching reader: it drives a
+stealth browser, captures the conversation from Gemini's RPC layer, and prints it
+as Markdown. When `SIGIL_GEMINI_READER` is unset, the built-in "open and paste"
+guidance applies instead.
+
+Two reader forms are supported:
+
+- **CLI on PATH** (bare name, e.g. `linksnap`) — spawned as
+  `linksnap <url> <flags>`; its stdout is the transcript. Default flags are
+  `--stdout --headless`; override them with `SIGIL_GEMINI_ARGS` (space-separated,
+  e.g. `--browser chrome --settle 2000`).
+- **ES module file** (absolute/relative path or `file://` URL) — `import()`ed,
+  then its default export (or named `fetchGemini`) is called:
+  ```js
+  export async function fetchGemini({ url }) {
+    // open url in a real browser (Playwright/Puppeteer), grab the transcript…
+    return { text: "…raw chat text or markdown…", title: "Optional title" };
+  }
+  ```
+  `text` is required; `title` is optional.
+
+Any reader error is reported with a hint to install/fix it or unset the variable.
+Bare scoped names (`@scope/pkg`) and names with path separators are treated as
+files; everything else runs as a CLI on PATH.
 
 Options: `-o, --output <file>` · `--json` (also print evidence sections) · `--title <text>` ·
 `--note <text>` · `--top-sentences <n>` · `--top-keyphrases <n>` · `--port <n>` · `--help` ·

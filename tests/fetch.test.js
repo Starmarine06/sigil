@@ -14,6 +14,8 @@ import {
   geminiReaderName,
   fetchGeminiViaReader,
   geminiBlocked,
+  geminiCliFlags,
+  runGeminiCli,
 } from "../src/fetch-link.js";
 
 test("looksLikeUrl detects http(s) URLs and rejects everything else", () => {
@@ -141,6 +143,47 @@ test("fetchGeminiViaReader reports a reader that cannot be loaded", async () => 
     await assert.rejects(
       fetchGeminiViaReader("https://share.gemini.google/PJgxYtV0aZrQ"),
       /could not be loaded/
+    );
+  } finally {
+    if (had) process.env.SIGIL_GEMINI_READER = backup;
+    else delete process.env.SIGIL_GEMINI_READER;
+  }
+});
+
+test("geminiCliFlags defaults to stdout+headless and honors SIGIL_GEMINI_ARGS", () => {
+  const had = "SIGIL_GEMINI_ARGS" in process.env;
+  const backup = process.env.SIGIL_GEMINI_ARGS;
+  try {
+    delete process.env.SIGIL_GEMINI_ARGS;
+    assert.deepEqual(geminiCliFlags(), ["--stdout", "--headless"]);
+    process.env.SIGIL_GEMINI_ARGS = " --browser chrome  --settle 2000 ";
+    assert.deepEqual(geminiCliFlags(), ["--browser", "chrome", "--settle", "2000"]);
+    process.env.SIGIL_GEMINI_ARGS = "   ";
+    assert.deepEqual(geminiCliFlags(), ["--stdout", "--headless"]);
+  } finally {
+    if (had) process.env.SIGIL_GEMINI_ARGS = backup;
+    else delete process.env.SIGIL_GEMINI_ARGS;
+  }
+});
+
+test("runGeminiCli executes a command and captures stdout", async () => {
+  const stub = fileURLToPath(new URL("./fixtures/linksnap-stub.mjs", import.meta.url));
+  const text = await runGeminiCli(process.execPath, [stub, "--stdout"]);
+  assert.match(text, /linksnap stub/);
+});
+
+test("runGeminiCli rejects when the command cannot run", async () => {
+  await assert.rejects(runGeminiCli("__definitely_not_a_real_command__", ["x"]));
+});
+
+test("fetchGeminiViaReader reports a CLI reader that cannot be run", async () => {
+  const had = "SIGIL_GEMINI_READER" in process.env;
+  const backup = process.env.SIGIL_GEMINI_READER;
+  try {
+    process.env.SIGIL_GEMINI_READER = "__no_such_reader_bin__";
+    await assert.rejects(
+      fetchGeminiViaReader("https://share.gemini.google/PJgxYtV0aZrQ"),
+      /could not be run/
     );
   } finally {
     if (had) process.env.SIGIL_GEMINI_READER = backup;

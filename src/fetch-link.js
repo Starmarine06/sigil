@@ -19,6 +19,7 @@
  */
 
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 const CLAUDE_SHARE_RE = /^https?:\/\/(?:www\.)?claude\.ai\/share\/([0-9a-f-]{20,})$/i;
@@ -59,18 +60,29 @@ export function geminiGuidanceError(url) {
 }
 
 /**
- * Name of the optional Gemini reader package, from the SIGIL_GEMINI_READER
- * environment variable. A bare specifier resolves like any npm package (global
- * installs share one node_modules, so a globally-installed reader is found);
- * an absolute or relative path is loaded directly.
+ * Name of the optional Gemini reader, from the SIGIL_GEMINI_READER
+ * environment variable:
+ *   - a bare package name / executable (e.g. "linksnap")  → run as a CLI on PATH
+ *   - a file path (absolute, relative, or file:// URL)    → loaded as an ESM module
+ * Global installs put their bins on PATH, so a globally-installed reader just works.
  */
 export function geminiReaderName() {
   const v = process.env.SIGIL_GEMINI_READER;
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+/** Extra flags for the CLI reader, from SIGIL_GEMINI_ARGS (default: headless plus stdout). */
+export function geminiCliFlags() {
+  const v = process.env.SIGIL_GEMINI_ARGS;
+  const raw = typeof v === "string" && v.trim() ? v.trim() : "--stdout --headless";
+  return raw.split(/\s+/).filter(Boolean);
+}
+
 function isFileSpecifier(name) {
-  return /^\.{0,2}[/\\]/.test(name) || /^[A-Za-z]:[\\/]/.test(name) || /^[/\\]/.test(name);
+  // Scoped package names (@scope/name) stay bare; anything else that carries a
+  // path separator, or starts with ./ ../ a drive or a leading slash, is a path.
+  if (/^@[^/\\]+\//.test(name)) return false;
+  return /[/\\]/.test(name) || /^\.{0,2}[/\\]/.test(name) || /^[A-Za-z]:[\\/]/.test(name);
 }
 
 /**
@@ -83,36 +95,97 @@ function toImportSpec(name) {
   return pathToFileURL(abs).href;
 }
 
+/** Run a CLI reader as a child process and resolve with its stdout text. */
+export function runGeminiCli(cmd, args, timeoutMs = 240000) {
+  return new Promise((resolve, reject) => {
+    const quote = (a) => (/\s/.test(a) ? `"${String(a).replace(/"/g, '""')}"` : String(a));
+    let child;
+    if (process.platform === "win32") {
+      // .cmd bins (npm global shims) need cmd.exe; built the command line by hand
+// and passed verbatim so Node does not re-quote it (its default quoting mangles
+// hand-built quotes on Windows). cmd /c strips the outer pair of quotes, so the
+// line is wrapped in one more pair to keep a leading quoted token intact.
+      const line = `"${[cmd, ...args].map(quote).join(" ")}"`;
+      child = spawn(process.env.ComSpec || "cmd.exe", ["/d", "/c", line], {
+        windowsHide: true,
+        windowsVerbatimArguments: true,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } else {
+      child = spawn(cmd, args, {
+        windowsHide: true,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    }
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (d) => { out += d; });
+    child.stderr.on("data", (d) => { err += d; });
+    child.on("error", (e) => reject(e));
+    child.on("close", (code) => {
+      const text = out.trim();
+      if (code === 0 || text) {
+        resolve(text);
+      } else {
+        reject(
+          new Error(
+            `reader command "${cmd}" exited with code ${code}: ` +
+              (err.trim() || "no output on stdout")
+          )
+        );
+      }
+    });
+  });
+}
+
 /**
- * Contract of a Gemini reader module:
- *   - default export, or a named `fetchGemini`, is an async function
- *   - input:  { url: <share_url> }
- *   - output: { text: <transcript or markdown>, title?: string }
+ * Resolve a Gemini share URL through the configured reader.
+ * Two reader forms:
+ *   - CLI  (bare name / executable, e.g. "linksnap"):
+ *         spawned with "<url>" + SIGIL_GEMINI_ARGS (default: --stdout --headless),
+ *         stdout is captured as the transcript markdown.
+ *   - Module (a file path): the module exports a default fn or `fetchGemini`,
+ *         input  { url }, output { text, title? }.
  * Returns null when no reader is configured; throws when a configured reader
  * cannot be loaded or fails.
  */
 export async function fetchGeminiViaReader(url) {
   const name = geminiReaderName();
   if (!name) return null;
-  let mod;
+  if (isFileSpecifier(name)) {
+    let mod;
+    try {
+      mod = await import(toImportSpec(name));
+    } catch (e) {
+      throw new Error(
+        `SIGIL_GEMINI_READER is set to "${name}" but that module could not be loaded: ${e.message}. ` +
+          "Install or publish the reader package, fix the path, or unset the variable to use the built-in guidance."
+      );
+    }
+    const fn = mod.default || mod.fetchGemini;
+    if (typeof fn !== "function") {
+      throw new Error(`SIGIL_GEMINI_READER "${name}" exports no default function and no \`fetchGemini\` export.`);
+    }
+    const out = await fn({ url });
+    const text = out && typeof out.text === "string" ? out.text.trim() : "";
+    if (!text) {
+      throw new Error(`SIGIL_GEMINI_READER "${name}" returned no \`text\` string.`);
+    }
+    return { text, title: out && typeof out.title === "string" ? out.title : null };
+  }
+  let text;
   try {
-    mod = await import(toImportSpec(name));
+    text = await runGeminiCli(name, [url, ...geminiCliFlags()]);
   } catch (e) {
     throw new Error(
-      `SIGIL_GEMINI_READER is set to "${name}" but that module could not be loaded: ${e.message}. ` +
-        "Install or publish the reader package, fix the path, or unset the variable to use the built-in guidance."
+      `SIGIL_GEMINI_READER is set to "${name}" but the command could not be run: ${e.message}. ` +
+        "Make sure it is installed and on PATH, or unset the variable to use the built-in guidance."
     );
   }
-  const fn = mod.default || mod.fetchGemini;
-  if (typeof fn !== "function") {
-    throw new Error(`SIGIL_GEMINI_READER "${name}" exports no default function and no \`fetchGemini\` export.`);
-  }
-  const out = await fn({ url });
-  const text = out && typeof out.text === "string" ? out.text.trim() : "";
   if (!text) {
-    throw new Error(`SIGIL_GEMINI_READER "${name}" returned no \`text\` string.`);
+    throw new Error(`SIGIL_GEMINI_READER "${name}" produced no output on stdout.`);
   }
-  return { text, title: out && typeof out.title === "string" ? out.title : null };
+  return { text, title: null };
 }
 
 /**
