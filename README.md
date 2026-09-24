@@ -28,9 +28,16 @@ sigil                      # interactive session (like opencode) for current dir
 sigil my-project           # interactive session for a named project
 sigil < FILE > out.md      # read chat text from stdin
 sigil chat.json            # analyze a Claude / Gemini export file
-sigil https://claude.ai/share/...   # fetch a share link
+sigil https://claude.ai/share/...     # fetch a share link
+sigil https://chatgpt.com/share/...   # fetch a ChatGPT share link
 sigil --serve              # local web UI at http://localhost:8177
 ```
+
+Share links: Claude (`claude.ai/share/…`), ChatGPT (`chatgpt.com/share/…`,
+including legacy `chat.openai.com/share/…`), and general raw URLs (exports, gists,
+pastebins) are fetched automatically through a reader proxy. Gemini share links
+(`share.gemini.google/…`) are served by Google only to real browsers, so `sigil`
+asks you to open the link and paste the conversation text instead.
 
 Options: `-o, --output <file>` · `--json` (also print evidence sections) · `--title <text>` ·
 `--note <text>` · `--top-sentences <n>` · `--top-keyphrases <n>` · `--port <n>` · `--help` ·

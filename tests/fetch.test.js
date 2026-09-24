@@ -8,6 +8,7 @@ import {
   proxyTarget,
   isChatgptShare,
   isGeminiShare,
+  geminiGuidanceError,
 } from "../src/fetch-link.js";
 
 test("looksLikeUrl detects http(s) URLs and rejects everything else", () => {
@@ -70,4 +71,14 @@ test("isChatgptShare and isGeminiShare recognize only their own domains", () => 
   assert.equal(isGeminiShare("https://share.gemini.google/KP69cv0LJ3nw"), true);
   assert.equal(isGeminiShare("https://gemini.google.com/app"), false);
   assert.equal(isGeminiShare("https://chatgpt.com/share/6ab4334f-17d0-83e8-9285-74a36561a46e"), false);
+});
+
+test("geminiGuidanceError puts the share URL on its own final line", () => {
+  const url = "https://share.gemini.google/PJgxYtV0aZrQ";
+  const msg = geminiGuidanceError(url);
+  const lines = msg.split("\n");
+  assert.equal(lines.length, 3);
+  assert.match(lines[0], /real browsers/i);
+  assert.match(lines[1], /paste it/);
+  assert.equal(lines[2], url);
 });

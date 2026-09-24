@@ -8,9 +8,9 @@
  *     server do this fetch — never the browser tab.
  *   - https://chatgpt.com/share/<uuid>       → fetched through the reader proxy
  *     (also the legacy https://chat.openai.com/share/<uuid> domain).
- *   - https://share.gemini.google/<token>    → fetched through the reader proxy.
- *     ChatGPT/Gemini share pages are browser-rendered; a direct fetch returns a
- *     JS shell or a sign-in wall, so they need the proxy too.
+ *   - https://share.gemini.google/<token>    → Google serves these only to real
+ *     browsers; a server fetch returns a sign-in wall, so the CLI guides the
+ *     user to open the link and paste the conversation text instead.
  *   - any other http(s) URL                  → fetched directly (raw JSON export,
  *     gist, pastebin, etc.).
  *
@@ -39,6 +39,20 @@ export function isChatgptShare(raw) {
 /** True for Gemini share-page URLs. */
 export function isGeminiShare(raw) {
   return GEMINI_SHARE_RE.test(String(raw).trim());
+}
+
+/**
+ * Error message when Google walls a Gemini share link. Google serves these
+ * pages only to real browsers (even for public links), so the fallback is to
+ * open the link and paste the conversation text. The URL goes on its own final
+ * line so terminals never truncate it mid-way.
+ */
+export function geminiGuidanceError(url) {
+  return (
+    "Google serves Gemini share links only to real browsers (public or not).\n" +
+    "Open this in your browser, copy the conversation, and paste it:\n" +
+    url
+  );
 }
 
 /**
@@ -116,11 +130,7 @@ export async function fetchLink(raw) {
     isGeminiShare(url) &&
     /accounts\.google\.com\/ServiceLogin/i.test(out)
   ) {
-    throw new Error(
-      "Google serves Gemini share links only to real browsers (public or not).\n" +
-        "Open this in your browser, copy the conversation, and paste it:\n" +
-        url
-    );
+    throw new Error(geminiGuidanceError(url));
   }
   if (!out) throw new Error(`empty response from ${target}`);
   return out;
