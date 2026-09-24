@@ -67,9 +67,8 @@ RAKE, TextRank, MMR, Luhn). Tests: `npm test` (node:test). Cross-OS: Windows/Lin
   wrapper). New fixture `tests/fixtures/linksnap-stub.mjs`.
 
 ## Known next steps
-1. Publisher: (user) confirm browser handling of `linksnap` gemini capture flags; optionally make
-   linksnap's `--list`/filter surface fold into sigil. Already live-verified end to end.
+1. **PUBLISHED 1.1.0** (user ran it) — `npm view @sigilware/sigil version` === `1.1.0`, `latest` tag = 1.1.0. 
 2. Verify TUI wrapping in a real terminal (open the repo TUI, paste a Gemini link).
-3. Publish **1.1.0** (needs fresh OTP), confirm `npm view @sigilware/sigil version` === `1.1.0`.
-4. Anything else in README's feature list not yet done (transcript parsing `[^ ]+`,
+3. Anything else in README's feature list not yet done (transcript parsing `[^ ]+`,
    `/show` overlay, etc.).
+4. Optional: fold linksnap's segment list / filters (`--list`) into sigil later.
