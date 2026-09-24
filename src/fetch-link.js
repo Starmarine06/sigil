@@ -177,10 +177,27 @@ export async function fetchGeminiViaReader(url) {
   try {
     text = await runGeminiCli(name, [url, ...geminiCliFlags()]);
   } catch (e) {
-    throw new Error(
-      `SIGIL_GEMINI_READER is set to "${name}" but the command could not be run: ${e.message}. ` +
-        "Make sure it is installed and on PATH, or unset the variable to use the built-in guidance."
-    );
+    const msg = String(e.message || e);
+    const notFound =
+      /not recognized|cannot find|ENOENT|command not found|The system cannot find the path|network path was not found/i.test(
+        msg
+      );
+    // If it's a bare CLI name and not found on PATH, fall back to npx -y
+    if (!isFileSpecifier(name) && notFound) {
+      try {
+        text = await runGeminiCli("npx", ["-y", "--quiet", name, url, ...geminiCliFlags()]);
+      } catch (e2) {
+        throw new Error(
+          `SIGIL_GEMINI_READER is set to "${name}" but the command could not be run: ${e2.message}. ` +
+            "Make sure it is installed and on PATH, or unset the variable to use the built-in guidance."
+        );
+      }
+    } else {
+      throw new Error(
+        `SIGIL_GEMINI_READER is set to "${name}" but the command could not be run: ${e.message}. ` +
+          "Make sure it is installed and on PATH, or unset the variable to use the built-in guidance."
+      );
+    }
   }
   if (!text) {
     throw new Error(`SIGIL_GEMINI_READER "${name}" produced no output on stdout.`);
