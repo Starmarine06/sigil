@@ -1,4 +1,5 @@
 import { tryClaudeExport } from "./claude-export.js";
+import { tryChatGPTExport } from "./chatgpt-export.js";
 import { tryClaudeShare } from "./claude-share.js";
 import { tryGeminiTakeout } from "./gemini-takeout.js";
 import { tryGeminiConsole } from "./gemini-console.js";
@@ -39,6 +40,9 @@ export function parseInput(input, opts = {}) {
   }
 
   if (data && typeof data === "object") {
+    const chatgpt = tryChatGPTExport(data);
+    if (chatgpt) return chatgpt;
+
     const claude = tryClaudeExport(data);
     if (claude) return claude;
 
@@ -65,7 +69,7 @@ export function parseInput(input, opts = {}) {
   }
 
   return {
-    error: "Unrecognized input. Expected a Claude export JSON, Gemini export JSON, or pasted chat text.",
+    error: "Unrecognized input. Expected a Claude, ChatGPT or Gemini export JSON, or pasted chat text.",
   };
 }
 

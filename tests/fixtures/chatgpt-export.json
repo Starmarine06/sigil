@@ -1,0 +1,248 @@
+[
+  {
+    "title": "Older chat",
+    "create_time": 1750000000,
+    "update_time": 1750000100,
+    "mapping": {
+      "r": {
+        "id": "r",
+        "message": null,
+        "parent": null,
+        "children": [
+          "x"
+        ]
+      },
+      "x": {
+        "id": "x",
+        "message": {
+          "id": "x",
+          "author": {
+            "role": "user"
+          },
+          "create_time": 1760000001,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "An older conversation that should not be picked."
+            ]
+          },
+          "metadata": {}
+        },
+        "parent": "r",
+        "children": []
+      }
+    },
+    "current_node": "x"
+  },
+  {
+    "title": "Photo renamer CLI",
+    "create_time": 1760000000.5,
+    "update_time": 1760000900.1,
+    "mapping": {
+      "root": {
+        "id": "root",
+        "message": null,
+        "parent": null,
+        "children": [
+          "sys"
+        ]
+      },
+      "sys": {
+        "id": "sys",
+        "message": {
+          "id": "sys",
+          "author": {
+            "role": "system"
+          },
+          "create_time": 1760000003,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              ""
+            ]
+          },
+          "metadata": {
+            "is_visually_hidden_from_conversation": true
+          }
+        },
+        "parent": "root",
+        "children": [
+          "u1"
+        ]
+      },
+      "u1": {
+        "id": "u1",
+        "message": {
+          "id": "u1",
+          "author": {
+            "role": "user"
+          },
+          "create_time": 1760000002,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "I want a CLI that renames photos by their EXIF date. Node 20, no dependencies if possible."
+            ]
+          },
+          "metadata": {}
+        },
+        "parent": "sys",
+        "children": [
+          "a1"
+        ]
+      },
+      "a1": {
+        "id": "a1",
+        "message": {
+          "id": "a1",
+          "author": {
+            "role": "assistant"
+          },
+          "create_time": 1760000002,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Plan: read the EXIF DateTimeOriginal tag with a small hand-written parser, then rename to YYYY-MM-DD_HHMMSS.jpg. Start with `src/exif.js`."
+            ]
+          },
+          "metadata": {
+            "model_slug": "gpt-5"
+          }
+        },
+        "parent": "u1",
+        "children": [
+          "u2",
+          "u2b"
+        ]
+      },
+      "u2b": {
+        "id": "u2b",
+        "message": {
+          "id": "u2b",
+          "author": {
+            "role": "user"
+          },
+          "create_time": 1760000003,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Actually use Python instead."
+            ]
+          },
+          "metadata": {}
+        },
+        "parent": "a1",
+        "children": [
+          "a2b"
+        ]
+      },
+      "a2b": {
+        "id": "a2b",
+        "message": {
+          "id": "a2b",
+          "author": {
+            "role": "assistant"
+          },
+          "create_time": 1760000003,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Sure, here is a Python version using Pillow."
+            ]
+          },
+          "metadata": {
+            "model_slug": "gpt-5"
+          }
+        },
+        "parent": "u2b",
+        "children": []
+      },
+      "u2": {
+        "id": "u2",
+        "message": {
+          "id": "u2",
+          "author": {
+            "role": "user"
+          },
+          "create_time": 1760000002,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Good. What about files with no EXIF data?"
+            ]
+          },
+          "metadata": {}
+        },
+        "parent": "a1",
+        "children": [
+          "t1"
+        ]
+      },
+      "t1": {
+        "id": "t1",
+        "message": {
+          "id": "t1",
+          "author": {
+            "role": "assistant"
+          },
+          "create_time": 1760000002,
+          "content": {
+            "content_type": "code",
+            "language": "javascript",
+            "text": "const fallback = fs.statSync(file).mtime;"
+          },
+          "metadata": {
+            "model_slug": "gpt-5"
+          }
+        },
+        "parent": "u2",
+        "children": [
+          "tool1"
+        ]
+      },
+      "tool1": {
+        "id": "tool1",
+        "message": {
+          "id": "tool1",
+          "author": {
+            "role": "tool"
+          },
+          "create_time": 1760000005,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "ok"
+            ]
+          },
+          "metadata": {}
+        },
+        "parent": "t1",
+        "children": [
+          "a2"
+        ]
+      },
+      "a2": {
+        "id": "a2",
+        "message": {
+          "id": "a2",
+          "author": {
+            "role": "assistant"
+          },
+          "create_time": 1760000002,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Fall back to the file mtime and add a `--strict` flag that skips those files instead. Run `node bin/rename.js ./photos --dry-run` to preview."
+            ]
+          },
+          "metadata": {
+            "model_slug": "gpt-5"
+          }
+        },
+        "parent": "tool1",
+        "children": []
+      }
+    },
+    "current_node": "a2"
+  }
+]

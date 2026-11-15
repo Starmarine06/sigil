@@ -88,3 +88,37 @@ test("JSON passed as string parses", () => {
   const chat = parseInput(raw);
   assert.equal(chat.source, "claude");
 });
+
+test("chatgpt export follows the visible branch of the newest conversation", () => {
+  const chat = fixtureChat("chatgpt-export");
+  assert.equal(chat.source, "chatgpt");
+  assert.equal(chat.title, "Photo renamer CLI");
+  assert.deepEqual(chat.messages.map((m) => m.role), ["user", "assistant", "user", "assistant"]);
+  assert.ok(chat.messages[0].text.includes("EXIF date"));
+  assert.ok(chat.models.includes("gpt-5"));
+  assert.ok(chat.at.startsWith("2025-"));
+});
+
+test("chatgpt export skips abandoned branches, system and tool nodes", () => {
+  const chat = fixtureChat("chatgpt-export");
+  const all = chat.messages.map((m) => m.text).join("\n");
+  assert.ok(!all.includes("Python"));
+  assert.ok(!all.includes("should not be picked"));
+  assert.ok(!chat.messages.some((m) => m.text.trim() === "ok"));
+});
+
+test("chatgpt export merges consecutive assistant nodes and keeps code", () => {
+  const chat = fixtureChat("chatgpt-export");
+  const last = chat.messages[3].text;
+  assert.ok(last.includes("```javascript"));
+  assert.ok(last.includes("statSync"));
+  assert.ok(last.includes("--strict"));
+});
+
+test("a single chatgpt conversation object parses without current_node", () => {
+  const [, conv] = JSON.parse(fixture("chatgpt-export.json"));
+  delete conv.current_node;
+  const chat = parseInput(conv);
+  assert.equal(chat.source, "chatgpt");
+  assert.equal(chat.messages.length, 4);
+});

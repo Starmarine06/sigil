@@ -1,7 +1,7 @@
 # sigil
 
 Deterministic, explainable chat-to-context extractor for [Claude](https://claude.ai) and
-[Gemini](https://gemini.google.com) exports and share links. Turns a long conversation into a
+[Gemini](https://gemini.google.com) exports and share links, plus ChatGPT data exports. Turns a long conversation into a
 compact, evidence-annotated context doc you can hand to any LLM (or yourself) to continue the work.
 
 A sigil is a compact symbol that carries meaning — this tool distills a whole thread into the
@@ -27,7 +27,8 @@ Requires Node.js 18+.
 sigil                      # interactive session (like opencode) for current dir
 sigil my-project           # interactive session for a named project
 sigil < FILE > out.md      # read chat text from stdin
-sigil chat.json            # analyze a Claude / Gemini export file
+sigil chat.json            # analyze a Claude / ChatGPT / Gemini export file
+sigil conversations.json   # ChatGPT data export: picks the most recent conversation
 sigil https://claude.ai/share/...     # fetch a share link
 sigil https://chatgpt.com/share/...   # fetch a ChatGPT share link
 sigil --serve              # local web UI at http://localhost:8177
@@ -90,7 +91,7 @@ Options: `-o, --output <file>` · `--json` (also print evidence sections) · `--
 
 ## How it works
 
-1. **Parse** — detects Claude export / Claude share link / Gemini console / Gemini Takeout and
+1. **Parse** — detects Claude export / Claude share link / ChatGPT export / Gemini console / Gemini Takeout and
    normalizes the transcript (fences, roles, message ids).
 2. **Extract** — goal, key topics + keyphrases, code blocks, files, glossary, questions, current
    state (last ask + next steps), and a compressed transcript (user turns verbatim, assistant
