@@ -71,7 +71,10 @@ async function main() {
   const parsed = parseArgs(argv);
 
   if (parsed.help) return process.stdout.write(HELP);
-  if (parsed.version) return process.stdout.write(`sigil 1.1.0\n`);
+  if (parsed.version) {
+    const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+    return process.stdout.write(`sigil ${version}\n`);
+  }
   if (parsed.serve) return startServer(parsed.port || 8177);
 
   const arg = parsed.positional[0];
